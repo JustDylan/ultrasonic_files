@@ -18,9 +18,15 @@
     <ClCompile Include="ultrasonic_files.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="FrequencyGenerator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FrequencyGenerator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

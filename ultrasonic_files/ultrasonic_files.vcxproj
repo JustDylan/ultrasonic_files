@@ -144,9 +144,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="FrequencyGenerator.cpp" />
     <ClCompile Include="ultrasonic_files.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="FrequencyGenerator.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
