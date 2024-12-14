@@ -24,9 +24,26 @@ struct WaveData
 struct ListenData
 {
     float peak;
+    float test;
     int samplesPerSecond;
     int bytesPerSample;
 };
+
+// discrete fourier transform component for frequency k
+float DFT(Sint16* samples, int length, int k)
+{
+    // calculate real and imaginary components for frequency component k
+    float realSum = 0;
+    float imaginarySum = 0;
+    for (int n = 0; n < length; ++n)
+    {
+        realSum += samples[n] * cosf(-2.0f * PI / length * k * n);
+        imaginarySum += samples[n] * sinf(-2.0f * PI / length * k * n);
+    }
+
+    // calculate frequency magnitude
+    return sqrt(realSum * realSum + imaginarySum * imaginarySum);
+}
 
 void AudioCallback(void* UserData, Uint8* Stream, int Length)
 {
@@ -68,11 +85,28 @@ void ListenCallback(void* UserData, Uint8* Stream, int Length)
     Sint16* SampleBuffer = (Sint16*)Stream;
     int samplesToRead = Length / AudioUserData->bytesPerSample;
 
+    // frequency 234hz for 4096 samples
+    int frequencyK = 20;
+    AudioUserData->peak = DFT(SampleBuffer, samplesToRead, frequencyK);
+
+    // frequency 1172hz
+    AudioUserData->test = DFT(SampleBuffer, samplesToRead, 100);
+
+
+    /*
+    for (int i = 0; i < 50; ++i)
+    {
+        if(i != frequencyK)
+            AudioUserData->test += DFT(SampleBuffer, samplesToRead, i);
+    }*/
+
+    /*
     for (int i = 0; i < samplesToRead; ++i)
     {
         if ((float)SampleBuffer[i]*(float)SampleBuffer[i] > AudioUserData->peak*AudioUserData->peak)
             AudioUserData->peak = SampleBuffer[i];
-    }
+    }*/
+    
 }
 
 int main(int argc, char* argv[])
@@ -190,8 +224,10 @@ int main(int argc, char* argv[])
                 }
             }
 
-            cout << AudioUserData.peak << endl;
+            cout << "234hz : " << AudioUserData.peak << endl;
+            cout << "1172hz: " << AudioUserData.test << endl;
             AudioUserData.peak = 0;
+            AudioUserData.test = 0;
 
             SDL_Delay(500);
         }
