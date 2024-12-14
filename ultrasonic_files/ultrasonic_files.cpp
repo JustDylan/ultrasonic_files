@@ -6,13 +6,16 @@
 #include <math.h>
 #include "FrequencyGenerator.h"
 
+static float const PI = M_PI;
+
 using std::cout;
+using std::endl;
 
 struct WaveData
 {
     int samplesPerSecond;
     int bytesPerSample;
-    int tonePosition;
+    float tonePosition;
     float toneHz;
     float targetToneHz;
     float toneVolume;
@@ -23,30 +26,34 @@ struct WaveData
 void AudioCallback(void* UserData, Uint8* Stream, int Length)
 {
     WaveData* AudioUserData = (WaveData*)UserData;
-    static Uint32 Count = 0;
 
     Sint16* SampleBuffer = (Sint16*)Stream;
     int SamplesToWrite = Length / AudioUserData->bytesPerSample;
 
+    // number of samples to one cycle of the target tone
+    float samplesPerCycle = float(AudioUserData->samplesPerSecond) / AudioUserData->targetToneHz;
+
     // link target waveform to current waveform
     if (AudioUserData->toneHz != AudioUserData->targetToneHz)
     {
-        AudioUserData->tonePosition = AudioUserData->toneHz * AudioUserData->tonePosition / AudioUserData->targetToneHz;
+        float c = 2.0f * PI / AudioUserData->samplesPerSecond;
+        int i = AudioUserData->tonePosition * AudioUserData->toneHz * c / (2.0f * PI);
+
+        //offset to nearest identical position for target tone
+        float positionOffset = 2.0f * PI * i / (AudioUserData->targetToneHz * c);
+
+        AudioUserData->tonePosition = AudioUserData->toneHz * AudioUserData->tonePosition / AudioUserData->targetToneHz - positionOffset;
         AudioUserData->toneHz = AudioUserData->targetToneHz;
     }
 
     for (int i = 0; i < SamplesToWrite; ++i)
     {
-        // number of samples to one cycle of the tone
-        float samplesPerCycle = float(AudioUserData->samplesPerSecond) / AudioUserData->toneHz;
-        Sint16 ToneValue = (0.5f + (AudioUserData->toneVolume * sin(2.0f * M_PI * AudioUserData->tonePosition / samplesPerCycle)));
+        Sint16 ToneValue = (0.5f + (AudioUserData->toneVolume * sin(2.0f * PI * AudioUserData->tonePosition / samplesPerCycle)));
         SampleBuffer[i] = ToneValue;
         
         // advance in tone
         ++(AudioUserData->tonePosition);
     }
-
-    AudioUserData->toneHz = AudioUserData->targetToneHz;
 }
 
 int main(int argc, char* argv[])
@@ -64,7 +71,7 @@ int main(int argc, char* argv[])
     AudioUserData.bytesPerSample = sizeof(Sint16);
     AudioUserData.tonePosition = 0;
     AudioUserData.toneVolume = 3000;
-    AudioUserData.toneHz = 840;
+    AudioUserData.toneHz = 19000;
     AudioUserData.targetToneHz = AudioUserData.toneHz;
     
 
@@ -95,7 +102,8 @@ int main(int argc, char* argv[])
             }
         }
 
-        AudioUserData.targetToneHz -= 25;
+        AudioUserData.targetToneHz += 25;
+        cout << AudioUserData.tonePosition << endl;
 
         SDL_Delay(500);
     }
