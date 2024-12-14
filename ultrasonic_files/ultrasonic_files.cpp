@@ -19,8 +19,13 @@ struct WaveData
     float toneHz;
     float targetToneHz;
     float toneVolume;
-    float wavePeriod;
+};
 
+struct ListenData
+{
+    float peak;
+    int samplesPerSecond;
+    int bytesPerSample;
 };
 
 void AudioCallback(void* UserData, Uint8* Stream, int Length)
@@ -56,56 +61,140 @@ void AudioCallback(void* UserData, Uint8* Stream, int Length)
     }
 }
 
+void ListenCallback(void* UserData, Uint8* Stream, int Length)
+{
+    ListenData* AudioUserData = (ListenData*)UserData;
+
+    Sint16* SampleBuffer = (Sint16*)Stream;
+    int samplesToRead = Length / AudioUserData->bytesPerSample;
+
+    for (int i = 0; i < samplesToRead; ++i)
+    {
+        if ((float)SampleBuffer[i]*(float)SampleBuffer[i] > AudioUserData->peak*AudioUserData->peak)
+            AudioUserData->peak = SampleBuffer[i];
+    }
+}
+
 int main(int argc, char* argv[])
 {
+    //TESTING
+    //const char* testArgs[] = { "ultrasonic_files.exe", "listen", "message" };
+    argc = 2;
+    //argv = (char**)&testArgs;
+    argv = new char* [argc];
+    argv[0] = (char*)("test");
+    argv[1] = (char*)("listen");
+    //argv[3] = (char*)"message";
+    cout << "argc: " << argc << "\nargv:\n";
+    for (int i = 0; i < argc; ++i)
+    {
+        cout << argv[i] << endl;
+    }
+
+    //TESTING END
+
+    if (argc < 2)
+    {
+        cout << "missing arguments: mode, message";
+    }
+
     if (SDL_Init(SDL_INIT_AUDIO) == -1)
     {
         cout << SDL_GetError();
         return 1;
     }
 
-    std::cout << "Hello World!\n";
-
-    WaveData AudioUserData = { 0 };
-    AudioUserData.samplesPerSecond = 48000;
-    AudioUserData.bytesPerSample = sizeof(Sint16);
-    AudioUserData.tonePosition = 0;
-    AudioUserData.toneVolume = 3000;
-    AudioUserData.toneHz = 19000;
-    AudioUserData.targetToneHz = AudioUserData.toneHz;
-    
-
-    SDL_AudioSpec Want, Have;
-    SDL_AudioDeviceID AudioDeviceID;
-    Want.freq = AudioUserData.samplesPerSecond;
-    Want.format = AUDIO_S16;
-    Want.channels = 1;
-    // number of samples to process before processing change in tone
-    Want.samples = 4096;
-    Want.callback = &AudioCallback;
-    Want.userdata = &AudioUserData;
-    AudioDeviceID = SDL_OpenAudioDevice(0, 0, &Want, &Have, 0);
-
-    SDL_PauseAudioDevice(AudioDeviceID, 0);
-
-    int Running = 1;
-    while (Running)
+    // transmit mode
+    if (strcmp(argv[1], "transmit") == 0 && argc >= 3)
     {
 
-        SDL_Event Event;
-        while (SDL_PollEvent(&Event))
+        cout << "Transmit Mode\n";
+
+        WaveData AudioUserData = { 0 };
+        AudioUserData.samplesPerSecond = 48000;
+        AudioUserData.bytesPerSample = sizeof(Sint16);
+        AudioUserData.tonePosition = 0;
+        AudioUserData.toneVolume = 3000;
+        AudioUserData.toneHz = 19000;
+        AudioUserData.targetToneHz = AudioUserData.toneHz;
+
+        SDL_AudioSpec Want, Have;
+        SDL_AudioDeviceID AudioDeviceID;
+        Want.freq = AudioUserData.samplesPerSecond;
+        Want.format = AUDIO_S16;
+        Want.channels = 1;
+        // number of samples to process before processing change in tone
+        Want.samples = 4096;
+
+        Want.userdata = &AudioUserData;
+        Want.callback = &AudioCallback;
+        AudioDeviceID = SDL_OpenAudioDevice(0, 0, &Want, &Have, 0);
+
+        SDL_PauseAudioDevice(AudioDeviceID, 0);
+
+        int Running = 1;
+        while (Running)
         {
-            if (Event.type == SDL_QUIT)
+
+            SDL_Event Event;
+            while (SDL_PollEvent(&Event))
             {
-                Running = 0;
-                break;
+                if (Event.type == SDL_QUIT)
+                {
+                    Running = 0;
+                    break;
+                }
             }
+
+            AudioUserData.targetToneHz += 25;
+            cout << AudioUserData.tonePosition << endl;
+
+            SDL_Delay(500);
         }
+    }
+    // listen mode
+    else if (strcmp(argv[1], "listen") == 0)
+    {
+        cout << "Listen Mode\n";
 
-        AudioUserData.targetToneHz += 25;
-        cout << AudioUserData.tonePosition << endl;
+        ListenData AudioUserData = { 0 };
+        AudioUserData.samplesPerSecond = 48000;
+        AudioUserData.bytesPerSample = sizeof(Sint16);
+        AudioUserData.peak = 0;
 
-        SDL_Delay(500);
+        SDL_AudioSpec Want, Have;
+        SDL_AudioDeviceID AudioDeviceID;
+        Want.freq = AudioUserData.samplesPerSecond;
+        Want.format = AUDIO_S16;
+        Want.channels = 1;
+        // number of samples to process before processing change in tone
+        Want.samples = 4096;
+
+        Want.userdata = &AudioUserData;
+        Want.callback = &ListenCallback;
+        AudioDeviceID = SDL_OpenAudioDevice(0, 1, &Want, &Have, 0);
+
+        SDL_PauseAudioDevice(AudioDeviceID, 0);
+
+        int Running = 1;
+        while (Running)
+        {
+
+            SDL_Event Event;
+            while (SDL_PollEvent(&Event))
+            {
+                if (Event.type == SDL_QUIT)
+                {
+                    Running = 0;
+                    break;
+                }
+            }
+
+            cout << AudioUserData.peak << endl;
+            AudioUserData.peak = 0;
+
+            SDL_Delay(500);
+        }
     }
 
     return 0;
