@@ -76,7 +76,7 @@ void AudioCallback(void* UserData, Uint8* Stream, int Length)
 
     // write each pulse to samples
     int j = 0;
-    for (j = 0; j < SamplesToWrite; j += 2*pulseWidth)
+    for (j = 0; j < SamplesToWrite; j += pulseWidth)
     {
         if (AudioUserData->bufferIndex >= AudioUserData->bufferLength)
         {
@@ -110,9 +110,9 @@ void AudioCallback(void* UserData, Uint8* Stream, int Length)
         }
 
         //DEBUG
-        SDL_assert(j + pulseWidth * 2 <= SamplesToWrite);
+        SDL_assert(j + pulseWidth <= SamplesToWrite);
         //write samples
-        for (int i = j; i < j+pulseWidth*2; ++i)
+        for (int i = j; i < j+pulseWidth; ++i)
         {
             Sint16 ToneValue = (0.5f + (AudioUserData->toneVolume * sin(2.0f * PI * AudioUserData->tonePosition / samplesPerCycle)));
             SampleBuffer[i] = ToneValue;
@@ -136,7 +136,7 @@ void ListenCallback(void* UserData, Uint8* Stream, int Length)
     
 
     //TEST magic number
-    int const bitBufferSize = 48000 / pulseWidth / 2;
+    int const bitBufferSize = 48000 / pulseWidth;
     int* bitArray = new int[bitBufferSize];
     for (int i = 0; i < bitBufferSize; ++i)
     {
@@ -148,7 +148,7 @@ void ListenCallback(void* UserData, Uint8* Stream, int Length)
     //find start of pulse
     int maxIndex = 0;
     float maxMag = 0;
-    for (int i = 0; i < pulseWidth; i += 100)
+    for (int i = 0; i < pulseWidth; i += 30)
     {
         float onBitMag = DFT(SampleBuffer + i, pulseWidth, onFreq);
         float offBitMag = DFT(SampleBuffer + i, pulseWidth, offFreq);
@@ -175,7 +175,7 @@ void ListenCallback(void* UserData, Uint8* Stream, int Length)
 
     // interpret bits
     int arrayIndex = 0;
-    for (int i = maxIndex; i+pulseWidth < samplesToRead; i += 2*pulseWidth)
+    for (int i = maxIndex; i+pulseWidth <= samplesToRead; i += pulseWidth)
     {
         float onBitMag = DFT(SampleBuffer + i, pulseWidth, onFreq);
         float offBitMag = DFT(SampleBuffer + i, pulseWidth, offFreq);
