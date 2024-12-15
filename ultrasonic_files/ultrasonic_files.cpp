@@ -4,7 +4,7 @@
 #include <iostream>
 #include <SDL.h>
 #include <math.h>
-#include "FrequencyGenerator.h"
+#include <vector>
 
 static float const PI = M_PI;
 
@@ -26,6 +26,7 @@ static int const stopFreqSig = 18000;
 
 using std::cout;
 using std::endl;
+using std::vector;
 
 struct WaveData
 {
@@ -68,7 +69,7 @@ float DFT(Sint16* samples, int length, int k)
 
 void AudioCallback(void* UserData, Uint8* Stream, int Length)
 {
-    cout << "start\n";
+    //cout << "start\n";
     WaveData* AudioUserData = (WaveData*)UserData;
 
     Sint16* SampleBuffer = (Sint16*)Stream;
@@ -123,7 +124,7 @@ void AudioCallback(void* UserData, Uint8* Stream, int Length)
 
         
     }
-    cout << "stop\n";
+    //cout << "stop\n";
 }
 
 void ListenCallback(void* UserData, Uint8* Stream, int Length)
@@ -171,7 +172,7 @@ void ListenCallback(void* UserData, Uint8* Stream, int Length)
         }
     }
 
-    cout << "Start index: " << maxIndex << endl;
+    //cout << "Start index: " << maxIndex << endl;
 
     // interpret bits
     int arrayIndex = 0;
@@ -243,7 +244,7 @@ int main(int argc, char* argv[])
         //argv = (char**)&testArgs;
         argv = new char* [argc];
         argv[0] = (char*)("test");
-        argv[1] = (char*)("transmit");
+        argv[1] = (char*)("listen");
         argv[2] = (char*)("message");
         //argv[3] = (char*)"message";
         cout << "argc: " << argc << "\nargv:\n";
@@ -268,6 +269,7 @@ int main(int argc, char* argv[])
     // transmit mode
     if (strcmp(argv[1], "transmit") == 0 && argc >= 3)
     {
+        char message = argv[2][0];
 
         cout << "Transmit Mode\n";
 
@@ -281,13 +283,26 @@ int main(int argc, char* argv[])
 
         // load data:
         AudioUserData.bufferIndex = 0;
-        AudioUserData.bufferLength = 1000;
+        AudioUserData.bufferLength = 8;
         //TEST
         AudioUserData.bitBuffer = new bool[AudioUserData.bufferLength];
-        for (int i = 0; i < AudioUserData.bufferLength; ++i)
+        /*for (int i = 0; i < AudioUserData.bufferLength; ++i)
         {
-            AudioUserData.bitBuffer[i] = i%4 < 2;
+            AudioUserData.bitBuffer[i] = i%6 < 3;
+        }*/
+
+        for (int i = 0; i < 8; ++i)
+        {
+            bool nextBit = (message >> i) & 1;
+            AudioUserData.bitBuffer[i] = nextBit;
+            //AudioUserData.bitBuffer[3*i+1] = nextBit;
+            //AudioUserData.bitBuffer[3*i+2] = nextBit;
+            /*AudioUserData.bitBuffer[i * 5+1] = nextBit;
+            AudioUserData.bitBuffer[i * 5+2] = nextBit;
+            AudioUserData.bitBuffer[i * 5 + 3] = nextBit;
+            AudioUserData.bitBuffer[i * 5 + 4] = nextBit;*/
         }
+        
 
         SDL_AudioSpec Want, Have;
         SDL_AudioDeviceID AudioDeviceID;
@@ -319,7 +334,12 @@ int main(int argc, char* argv[])
             }
 
             //AudioUserData.targetToneHz += 25;
-            cout << AudioUserData.bufferIndex << endl;
+            //cout << AudioUserData.bufferIndex << endl;
+            if (AudioUserData.bufferIndex >= AudioUserData.bufferLength)
+            {
+                AudioUserData.bufferIndex = 0;
+                //cout << "sent" << endl;
+            }
 
             SDL_Delay(500);
         }
@@ -351,6 +371,10 @@ int main(int argc, char* argv[])
 
         SDL_PauseAudioDevice(AudioDeviceID, 0);
 
+        int readIndex = 0;
+        vector<int> outputPulses = vector<int>();
+        outputPulses.push_back(-2);
+
         int Running = 1;
         while (Running)
         {
@@ -368,16 +392,122 @@ int main(int argc, char* argv[])
             // get buffer from last sample buffer
             if (AudioUserData.outLength != 0)
             {
+                //cout << endl;
                 for (int i = 0; i < AudioUserData.outLength; ++i)
                 {
-                    cout << AudioUserData.outBuffer[i] << ", ";
+                    //cout << AudioUserData.outBuffer[i] << ", ";
                 }
-                cout << endl;
+                //cout << endl;
+
+                int redundancy = 1;
+                // condense redundant bits
+                for (int i = 0; i+redundancy <= AudioUserData.outLength; i += redundancy)
+                {
+                    int onTally = 0;
+                    int offTally = 0;
+                    int stopTally = 0;
+                    for (int j = 0; j < redundancy; ++j)
+                    {
+                        switch (AudioUserData.outBuffer[i])
+                        {
+                        case -2:
+                            ++stopTally;
+                            break;
+                        case 0:
+                            ++offTally;
+                            break;
+                        case 1:
+                            ++onTally;
+                            break;
+                        }
+                    }
+
+                    if (onTally > offTally && onTally > stopTally)
+                    {
+                        outputPulses.push_back(1);
+                    }
+                    else if (offTally > onTally && offTally > stopTally)
+                    {
+                        outputPulses.push_back(0);
+                    }
+                    else
+                    {
+                        outputPulses.push_back(-2);
+                    }
+                    
+                }
+
+                //cout << endl;
+                // show new bits added
+                for (int i = readIndex + 1; i < outputPulses.size(); ++i)
+                {
+                    //cout << outputPulses[i] << ", ";
+                }
+                //cout << endl;
+
                 AudioUserData.outLength = 0;
                 delete AudioUserData.outBuffer;
+
+                //check if new character is completed
+                int completeCharEnd = -1;
+
+                if (outputPulses[readIndex] != -2)
+                    for (; readIndex < outputPulses.size(); ++readIndex)
+                        if (outputPulses[readIndex] == -2)
+                            break;
+
+                if (outputPulses[readIndex] == -2)
+                    for (int i = readIndex+1; i < outputPulses.size(); ++i)
+                    {
+                        if (outputPulses[i] == -2)
+                        {
+                            if (outputPulses[i - 1] != -2)
+                            {
+                                completeCharEnd = i;
+                                break;
+                            }
+                            else
+                                readIndex = i;
+                        }
+                    }
+
+                if (completeCharEnd != -1)
+                {
+                    //cout << endl;
+                    // show new bits added
+                    for (int i = readIndex + 1; i < completeCharEnd; ++i)
+                    {
+                        //cout << outputPulses[i] << ", ";
+                    }
+                    //cout << endl;
+
+                    // convert binary to string
+                    for (int j = readIndex + 1; j+8 <= completeCharEnd; j += 8)
+                    {
+                        char newChar = '\0';
+                        for (int i = 0; i < 8; ++i)
+                        {
+                            if (outputPulses[j+i] == 1)
+                            {
+                                //newChar |= (1 << 8) >> i;
+                                newChar |= 1 << i;
+                            }
+                        }
+
+                        cout << newChar;
+                    }
+
+                    for(int i = outputPulses.size()-1; i >= 0; --i)
+                        if (outputPulses[i] == -2)
+                        {
+                            readIndex = i;
+                            break;
+                        }
+                    //readIndex = completeCharEnd;
+                }
             }
 
-            SDL_Delay(500);
+            SDL_Delay(300);
         }
     }
 
